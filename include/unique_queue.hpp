@@ -51,9 +51,14 @@ public:
   {
   }
 
+  unique_queue(const unique_queue& src) = default;
+
+  unique_queue(unique_queue&& src) noexcept = default;
+
   // Assignment
 
   unique_queue& operator=(const unique_queue& src) = default;
+
   unique_queue& operator=(unique_queue&& src) = default;
 
   // Capacity
