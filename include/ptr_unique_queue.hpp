@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright (c) 2024-2026, Ivan Pizhenko. All rights reserved.
+// Copyright (c) 2026, Ivan Pizhenko. All rights reserved.
 
 #pragma once
 
 #if __cplusplus < 202002L
 #error "This header file required at least C++ 20"
 #endif
+
+// STL
+#include <memory>
+#include <type_traits>
 
 // Boost
 #include <boost/multi_index_container.hpp>
@@ -14,56 +18,57 @@
 
 namespace stdx {
 
-template<typename T>
-struct unique_queue_default_key_extractor {
+template<typename T, typename PtrT = T*>
+struct ptr_unique_queue_default_key_extractor {
   using result_type = T;
 
-  T& operator()(T& v) const noexcept
+  T& operator()(PtrT& v) const noexcept
   {
-    return v;
+    return *v;
   }
 
-  const T& operator()(const T& v) const noexcept
+  const T& operator()(const PtrT& v) const noexcept
   {
-    return v;
+    return *v;
   }
 };
 
-template<typename T>
-struct unique_queue_item {
+template<typename T, typename PtrT = T*>
+struct ptr_unique_queue_item {
   std::size_t id;
-  T payload;
+  PtrT payload;
 };
 
 template <
     typename T,
-    typename KeyExtractor = unique_queue_default_key_extractor<T>,
+    typename PtrT = T*,
+    typename KeyExtractor = ptr_unique_queue_default_key_extractor<T, PtrT>,
     typename KeyHash = std::hash<std::remove_cv_t<typename KeyExtractor::result_type>>,
     typename KeyPred = std::equal_to<std::remove_cv_t<typename KeyExtractor::result_type>>,
-    typename Allocator = std::allocator<unique_queue_item<T>>>
-class unique_queue {
+    typename Allocator = std::allocator<ptr_unique_queue_item<T, PtrT>>>
+class ptr_unique_queue {
 public:
-  using value_type = unique_queue_item<T>;
+  using value_type = ptr_unique_queue_item<T, PtrT>;
   using reference = value_type&;
   using const_reference = const value_type&;
   using size_type = std::size_t;
   using difference_type = std::ptrdiff_t;
 
-  explicit unique_queue(size_type allowed_duplicate_count = 1) :
+  explicit ptr_unique_queue(size_type allowed_duplicate_count = 1) :
       m_allowed_duplicate_count(allowed_duplicate_count),
       m_last_id(0)
   {
   }
 
-  unique_queue(const unique_queue& src) = default;
+  ptr_unique_queue(const ptr_unique_queue& src) = default;
 
-  unique_queue(unique_queue&& src) noexcept = default;
+  ptr_unique_queue(ptr_unique_queue&& src) noexcept = default;
 
   // Assignment
 
-  unique_queue& operator=(const unique_queue& src) = default;
+  ptr_unique_queue& operator=(const ptr_unique_queue& src) = default;
 
-  unique_queue& operator=(unique_queue&& src) = default;
+  ptr_unique_queue& operator=(ptr_unique_queue&& src) = default;
 
   // Capacity
 
@@ -109,16 +114,17 @@ public:
 
   // Operations
 
-  void push_back(const T& v)
+  template <typename P = PtrT, typename = std::enable_if_t<std::is_copy_constructible_v<P>>>
+  void push_back(const PtrT& v)
   {
     check_and_remove_duplicates(v);
-    m_items.push_back(unique_queue_item<T> {++m_last_id, v });
+    m_items.push_back(ptr_unique_queue_item<T, PtrT> {++m_last_id, v });
   }
 
-  void push_back(T&& v)
+  void push_back(PtrT&& v)
   {
     check_and_remove_duplicates(v);
-    m_items.push_back(unique_queue_item<T> {++m_last_id, std::move(v) });
+    m_items.push_back(ptr_unique_queue_item<T, PtrT> {++m_last_id, std::move(v) });
   }
 
   void pop_front() noexcept
@@ -132,7 +138,7 @@ public:
     m_last_id = 0;
   }
 
-  void swap(unique_queue& other) noexcept
+  void swap(ptr_unique_queue& other) noexcept
   {
     m_items.swap(other.m_items);
     std::swap(m_last_id, other.m_last_id);
@@ -215,21 +221,21 @@ public:
     return rend();
   }
 
-  template <typename T1, typename KeyExtractor1, typename KeyHash1, typename KeyPred1, typename Allocator1>
-  friend void operator==(
-      const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& lhs,
-      const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& rhs) noexcept;
+  template <typename T1, typename PtrT1, typename KeyExtractor1, typename KeyHash1, typename KeyPred1, typename Allocator1>
+  friend bool operator==(
+      const ptr_unique_queue<T1, PtrT1, KeyExtractor1, KeyHash1, KeyPred1, Allocator1>& lhs,
+      const ptr_unique_queue<T1, PtrT1, KeyExtractor1, KeyHash1, KeyPred1, Allocator1>& rhs) noexcept;
 
-  template <typename T1, typename KeyExtractor1, typename KeyHash1, typename KeyPred1, typename Allocator1>
-  friend void operator!=(
-      const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& lhs,
-      const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& rhs) noexcept;
+  template <typename T1, typename PtrT1, typename KeyExtractor1, typename KeyHash1, typename KeyPred1, typename Allocator1>
+  friend bool operator!=(
+      const ptr_unique_queue<T1, PtrT1, KeyExtractor1, KeyHash1, KeyPred1, Allocator1>& lhs,
+      const ptr_unique_queue<T1, PtrT1, KeyExtractor1, KeyHash1, KeyPred1, Allocator1>& rhs) noexcept;
 
 private:
   struct key_extractor {
     using result_type = KeyExtractor::result_type;
 
-    result_type operator()(const unique_queue_item<T>& v) const
+    result_type operator()(const ptr_unique_queue_item<T, PtrT>& v) const
     {
       return KeyExtractor()(v.payload);
     }
@@ -289,15 +295,15 @@ private:
     return m_items.template get<1>();
   }
 
-  void check_and_remove_duplicates(const T& v)
+  void check_and_remove_duplicates(const PtrT& v)
   {
     auto& idx = hashed();
-    auto it = idx.find(v);
+    auto it = idx.find(KeyExtractor()(v));
     if (it != idx.end()) {
       auto max_it = it;
       ++it;
       size_type count = 1;
-      for (; it != idx.end() && it->payload == v; ++it, ++count) {
+      for (; it != idx.end() && KeyPred()(KeyExtractor()(it->payload), KeyExtractor()(v)); ++it, ++count) {
         if (it->id > max_it->id) max_it = it;
       }
       if (count == m_allowed_duplicate_count) {
@@ -311,30 +317,46 @@ private:
   size_type m_last_id;
 };
 
-template <typename T, typename KeyExtractor, typename KeyHash, typename KeyPred, typename Allocator>
+template <typename T, typename PtrT, typename KeyExtractor, typename KeyHash, typename KeyPred, typename Allocator>
 inline void swap(
-    unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& a,
-    unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& b) noexcept
+    ptr_unique_queue<T, PtrT, KeyExtractor, KeyHash, KeyPred, Allocator>& a,
+    ptr_unique_queue<T, PtrT, KeyExtractor, KeyHash, KeyPred, Allocator>& b) noexcept
 {
   a.swap(b);
 }
 
-template <typename T, typename KeyExtractor, typename KeyHash, typename KeyPred, typename Allocator>
+template <typename T, typename PtrT, typename KeyExtractor, typename KeyHash, typename KeyPred, typename Allocator>
 [[nodiscard]]
 inline bool operator==(
-    const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& lhs,
-    const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& rhs) noexcept
+    const ptr_unique_queue<T, PtrT, KeyExtractor, KeyHash, KeyPred, Allocator>& lhs,
+    const ptr_unique_queue<T, PtrT, KeyExtractor, KeyHash, KeyPred, Allocator>& rhs) noexcept
 {
   return lhs.m_allowed_duplicate_count == rhs.m_allowed_duplicate_count && lhs.m_items == rhs.m_items;
 }
 
-template <typename T, typename KeyExtractor, typename KeyHash, typename KeyPred, typename Allocator>
+template <typename T, typename PtrT, typename KeyExtractor, typename KeyHash, typename KeyPred, typename Allocator>
 [[nodiscard]]
 inline bool operator!=(
-    const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& lhs,
-    const unique_queue<T, KeyExtractor, KeyHash, KeyPred, Allocator>& rhs) noexcept
+    const ptr_unique_queue<T, PtrT, KeyExtractor, KeyHash, KeyPred, Allocator>& lhs,
+    const ptr_unique_queue<T, PtrT, KeyExtractor, KeyHash, KeyPred, Allocator>& rhs) noexcept
 {
   return !(lhs == rhs);
 }
+
+template <
+    typename T,
+    typename KeyExtractor = ptr_unique_queue_default_key_extractor<T, std::unique_ptr<T>>,
+    typename KeyHash = std::hash<std::remove_cv_t<typename KeyExtractor::result_type>>,
+    typename KeyPred = std::equal_to<std::remove_cv_t<typename KeyExtractor::result_type>>,
+    typename Allocator = std::allocator<ptr_unique_queue_item<T, std::unique_ptr<T>>>>
+using unique_ptr_unique_queue = ptr_unique_queue<T, std::unique_ptr<T>, KeyExtractor, KeyHash, KeyPred, Allocator>;
+
+template <
+    typename T,
+    typename KeyExtractor = ptr_unique_queue_default_key_extractor<T, std::shared_ptr<T>>,
+    typename KeyHash = std::hash<std::remove_cv_t<typename KeyExtractor::result_type>>,
+    typename KeyPred = std::equal_to<std::remove_cv_t<typename KeyExtractor::result_type>>,
+    typename Allocator = std::allocator<ptr_unique_queue_item<T, std::shared_ptr<T>>>>
+using shared_ptr_unique_queue = ptr_unique_queue<T, std::shared_ptr<T>, KeyExtractor, KeyHash, KeyPred, Allocator>;
 
 } // namespace stdx

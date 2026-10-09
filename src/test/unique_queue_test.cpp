@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright (c) 2024-2025, Ivan Pizhenko. All rights reserved.
+// Copyright (c) 2024-2026, Ivan Pizhenko. All rights reserved.
 
 // Project
 #include "../../include/unique_queue.hpp"

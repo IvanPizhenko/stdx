@@ -1,41 +1,36 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.28)
 
-# Define the project name and its version
-project(stdx VERSION 0.0.1 LANGUAGES CXX)
+project(stdx VERSION 0.0.2 LANGUAGES CXX)
 
-# Set the C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Define the library target
 add_library(stdx)
 
-# Specify the include directories
 target_include_directories(stdx
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
-# Gather source files
 file(GLOB_RECURSE STDX_SOURCES CONFIGURE_DEPENDS src/main/*.cpp)
 file(GLOB_RECURSE STDX_HEADERS CONFIGURE_DEPENDS include/*.h include/*.hpp)
 
-# Add sources to the library
 target_sources(stdx PRIVATE ${STDX_SOURCES})
 
-# Set properties for the library
 set_target_properties(stdx PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
     PUBLIC_HEADER "${STDX_HEADERS}"
 )
 
-# Ccompile options
 target_compile_options(stdx PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
-# Define installation rules
+if(EXISTS "/opt/boost-1.92.0-custom/include")
+    target_include_directories(stdx PUBLIC /opt/boost-1.92.0-custom/include)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS stdx
     EXPORT stdxTargets
@@ -53,7 +48,6 @@ install(EXPORT stdxTargets
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/stdx)
 
-# Enable testing if required
 option(STDX_ENABLE_TESTING "Enable testing for stdx library" ON)
 if(STDX_ENABLE_TESTING)
     enable_testing()
@@ -85,6 +79,14 @@ target_link_libraries(unique_queue_test PRIVATE stdx)
 target_include_directories(unique_queue_test PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
+
+add_executable(ptr_unique_queue_test src/test/ptr_unique_queue_test.cpp)
+target_link_libraries(ptr_unique_queue_test PRIVATE stdx)
+target_include_directories(ptr_unique_queue_test PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
 if(STDX_ENABLE_TESTING)
     add_test(NAME unique_queue_test COMMAND unique_queue_test)
+    add_test(NAME ptr_unique_queue_test COMMAND ptr_unique_queue_test)
 endif()
